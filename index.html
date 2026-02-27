@@ -47,8 +47,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <script>
-        // GANTI DENGAN URL WEB APP GAS ANDA
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbyOYyOx1IItz8giMGf9FjoB2dxYIQ5E-YIbqUqx53AqNIjaveNmEOZ0uP3RPdgXBc6O6Q/exec";
+        // PASTIKAN ANDA MENGGANTI URL INI
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxMQ9_13duAGfb0d_9z52MWhOoby1mtju7eDizUClItSxuHyc9ywnU-Jgq0d5PxmVJINQ/exec";
 
         let state = {
             user: JSON.parse(localStorage.getItem('edupro_student')) || null,
@@ -118,9 +118,6 @@
             renderApp();
         };
 
-        // ==========================================
-        // TAMPILAN PUBLIK
-        // ==========================================
         const renderPublicCatalog = async (container) => {
             container.innerHTML = `
                 <div class="text-center mb-5 mt-4">
@@ -173,9 +170,6 @@
             });
         };
 
-        // ==========================================
-        // LOGIN & REGISTER
-        // ==========================================
         const renderLogin = (container) => {
             container.innerHTML = `
                 <div class="row justify-content-center align-items-center h-100 mt-5">
@@ -239,9 +233,6 @@
             });
         };
 
-        // ==========================================
-        // DASHBOARD SISWA
-        // ==========================================
         const renderDashboard = async (container) => {
             container.innerHTML = `
                 <div class="card text-white p-4 p-md-5 mb-4 rounded-4 shadow-sm" style="background: linear-gradient(135deg, var(--primary-color), #8b5cf6);">
@@ -318,9 +309,6 @@
             });
         };
 
-        // ==========================================
-        // DETAIL KELAS & FITUR UPLOAD TUGAS
-        // ==========================================
         const renderCourseDetail = async (container) => {
             container.innerHTML = `
                 <button onclick="navigate('dashboard')" class="btn btn-link text-decoration-none text-muted p-0 mb-4 fw-semibold"><i class="fa-solid fa-arrow-left me-1"></i> Kembali ke Katalog</button>
@@ -370,37 +358,24 @@
             const materiSelesai = progressMap.length;
             const persentase = totalMateri === 0 ? 0 : Math.round((materiSelesai / totalMateri) * 100);
             
-            // --- LOGIKA PERHITUNGAN PREDIKAT & RATA-RATA NILAI ---
             let quizScore = quizzes.length > 0 ? (bestScore || 0) : null;
-            
-            // Ambil semua nilai tugas yang sudah diberikan oleh Guru (tidak kosong)
             let assignmentScores = mySubmissions.filter(s => s.score !== '' && s.score !== null).map(s => parseFloat(s.score));
             let avgAssignmentScore = assignmentScores.length > 0 ? (assignmentScores.reduce((a,b) => a+b, 0) / assignmentScores.length) : null;
 
             let finalScore = 0;
-            if (quizScore !== null && avgAssignmentScore !== null) {
-                finalScore = (quizScore + avgAssignmentScore) / 2;
-            } else if (quizScore !== null) {
-                finalScore = quizScore;
-            } else if (avgAssignmentScore !== null) {
-                finalScore = avgAssignmentScore;
-            } else {
-                finalScore = 100; // Lulus otomatis (Tidak ada kuis & tidak ada tugas yg dinilai)
-            }
+            if (quizScore !== null && avgAssignmentScore !== null) { finalScore = (quizScore + avgAssignmentScore) / 2; } 
+            else if (quizScore !== null) { finalScore = quizScore; } 
+            else if (avgAssignmentScore !== null) { finalScore = avgAssignmentScore; } 
+            else { finalScore = 100; }
 
             finalScore = Math.round(finalScore);
 
             let predikat = "LULUS";
-            if (finalScore >= 93) {
-                predikat = "SANGAT BAIK";
-            } else if (finalScore >= 80) {
-                predikat = "BAIK";
-            }
+            if (finalScore >= 93) { predikat = "SANGAT BAIK"; } 
+            else if (finalScore >= 80) { predikat = "BAIK"; }
 
-            // Simpan ke memori sementara agar bisa dipanggil saat Generate PDF
             window.courseFinalScore = finalScore;
             window.coursePredikat = predikat;
-            // --------------------------------------------------------
 
             const isPaidCourse = parseInt(state.activeCourse.price) > 0;
             const isLulus = (persentase === 100 && totalMateri > 0) && (quizzes.length === 0 || isPassedQuiz);
@@ -411,7 +386,7 @@
             } else { certArea.innerHTML = ''; }
 
             // =====================================
-            // TAB MATERI & TUGAS
+            // TAB MATERI
             // =====================================
             if (state.activeTab === 'materi') {
                 let html = ``;
@@ -481,7 +456,7 @@
                 content.innerHTML = html;
             } 
             // =====================================
-            // TAB KUIS
+            // TAB KUIS (DENGAN SOAL ACAK)
             // =====================================
             else if (state.activeTab === 'kuis') {
                 if (persentase < 100) {
@@ -490,6 +465,9 @@
                 if (quizzes.length === 0) {
                     content.innerHTML = `<div class="text-center text-muted p-5 bg-white rounded border">Guru belum membuat soal kuis untuk kelas ini. Anda otomatis lulus!</div>`; return;
                 }
+
+                // FITUR ACAK SOAL
+                let randomizedQuizzes = [...quizzes].sort(() => Math.random() - 0.5);
 
                 let html = '';
                 if (bestScore !== null) {
@@ -502,7 +480,7 @@
                 }
 
                 html += `<form id="quizForm" class="d-flex flex-column gap-3">`;
-                quizzes.forEach((q, idx) => {
+                randomizedQuizzes.forEach((q, idx) => {
                     html += `
                         <div class="card shadow-sm border-0">
                             <div class="card-body p-4">
@@ -539,16 +517,10 @@
 
         window.submitTask = async (materialId) => {
             const fileInput = document.getElementById(`task_file_${materialId}`);
-            
-            if (!fileInput.files || fileInput.files.length === 0) {
-                return Swal.fire('Oops!', 'Mohon pilih file foto/dokumen tugas Anda terlebih dahulu (Klik tombol Choose File).', 'warning');
-            }
+            if (!fileInput.files || fileInput.files.length === 0) { return Swal.fire('Oops!', 'Mohon pilih file foto/dokumen tugas Anda terlebih dahulu.', 'warning'); }
             
             const file = fileInput.files[0];
-            
-            if (file.size > 5 * 1024 * 1024) {
-                return Swal.fire('Oops!', 'Ukuran file terlalu besar. Maksimal 5MB.', 'warning');
-            }
+            if (file.size > 5 * 1024 * 1024) { return Swal.fire('Oops!', 'Ukuran file terlalu besar. Maksimal 5MB.', 'warning'); }
 
             Swal.fire({ title: 'Mengupload Tugas...', text: 'Mohon tunggu, foto sedang disimpan ke Google Drive...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
             
@@ -557,29 +529,18 @@
                 const result = e.target.result; 
                 const base64Data = result.split(',')[1];
                 
-                const payload = {
-                    student_id: state.user.id,
-                    course_id: state.activeCourse.id,
-                    material_id: materialId,
-                    fileName: file.name,
-                    mimeType: file.type,
-                    fileData: base64Data
-                };
-                
+                const payload = { student_id: state.user.id, course_id: state.activeCourse.id, material_id: materialId, fileName: file.name, mimeType: file.type, fileData: base64Data };
                 const res = await apiCall('submitAssignment', payload);
-                
-                if (res.success) {
-                    showToast(res.message);
-                    loadTabContent(); 
-                } else {
-                    Swal.fire('Gagal', res.error, 'error');
-                }
+                if (res.success) { showToast(res.message); loadTabContent(); } 
+                else { Swal.fire('Gagal', res.error, 'error'); }
             };
             reader.onerror = function() { Swal.fire('Gagal', 'Terjadi kesalahan saat membaca file.', 'error'); };
             reader.readAsDataURL(file); 
         };
 
-        // --- FUNGSI GENERATE SERTIFIKAT PDF DENGAN PREDIKAT LULUS ---
+        // =====================================
+        // GENERATE SERTIFIKAT DENGAN SMART BARCODE
+        // =====================================
         window.downloadCertificate = async () => {
             Swal.fire({ title: 'Menyiapkan Sertifikat...', text: 'Mengunduh desain dan QR Code validasi', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
 
@@ -591,7 +552,7 @@
 
                 const bgImg = new Image();
                 bgImg.crossOrigin = "Anonymous";
-                bgImg.src = "https://i.ibb.co.com/DDSSRmff/background-sertifikat1.png"; 
+                bgImg.src = "https://i.ibb.co.com/HwGLNCQ/template-background-sertifikat-A4.jpg"; 
                 await new Promise((resolve) => { bgImg.onload = resolve; bgImg.onerror = resolve; });
                 doc.addImage(bgImg, 'PNG', 0, 0, width, height);
 				
@@ -616,28 +577,24 @@
                 doc.setFontSize(14); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
                 doc.text("Atas keberhasilannya dalam menyelesaikan seluruh materi dan ujian pada kelas eksklusif:", width / 2, 110, { align: 'center' });
 
-                // NAMA KELAS
                 doc.setFontSize(20); doc.setFont('helvetica', 'bold');
                 doc.text(state.activeCourse.title, width / 2, 125, { align: 'center' });
 
-                // >>> TAMBAHAN BARU: PREDIKAT KELULUSAN & NILAI AKHIR <<<
-                doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129); // Warna Hijau
+                doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129);
                 doc.text(`Lulus dengan Predikat: ${window.coursePredikat} (${window.courseFinalScore}/100)`, width / 2, 135, { align: 'center' });
 
                 const today = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
                 doc.setFontSize(12); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
                 doc.text(`Tanggal Lulus: ${today}`, width / 2, 145, { align: 'center' });
 
-                // --- POSISI QR CODE & TANDA TANGAN ---
-                // Data Validasi QR Code sekarang menyertakan PREDIKAT & NILAI!
-                const validationText = `=== VALIDASI RESMI EDUPRO ===\nStatus: LULUS\nPredikat: ${window.coursePredikat} (${window.courseFinalScore}/100)\nNo. Sertifikat: ${state.user.id.toUpperCase()}\nNama: ${state.user.full_name}\nKegiatan: ${state.activeCourse.title}\nTanggal Lulus: ${today}`;
+                // --- SMART BARCODE: Mengirim seluruh data sertifikat ke Web App Server ---
+                const validationUrl = `${GAS_URL}?v=${state.user.id.toUpperCase()}&name=${encodeURIComponent(state.user.full_name)}&course=${encodeURIComponent(state.activeCourse.title)}&score=${window.courseFinalScore}&pred=${encodeURIComponent(window.coursePredikat)}&date=${encodeURIComponent(today)}`;
                 
                 const qrImg = new Image();
                 qrImg.crossOrigin = "Anonymous";
-                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(validationText)}`;
+                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(validationUrl)}`;
                 
                 await new Promise((resolve) => { qrImg.onload = resolve; qrImg.onerror = resolve; });
-                
                 doc.addImage(qrImg, 'PNG', (width / 2) - 12.5, 150, 25, 25);
                 
                 doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
