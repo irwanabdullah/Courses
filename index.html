@@ -44,11 +44,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <script>
-        // PASTIKAN ANDA MENGGANTI URL INI
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxMQ9_13duAGfb0d_9z52MWhOoby1mtju7eDizUClItSxuHyc9ywnU-Jgq0d5PxmVJINQ/exec";
+        // PASTIKAN ANDA MENGGANTI URL INI DENGAN HASIL DEPLOY "NEW VERSION" ANDA
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzsyQHWcDnWTiPNpajpo8FxRDkv9J1jNfQBtkw_e_S0bMLtYrqwlqwzUaYwPKVLgqU/exec";
 
         let state = {
             user: JSON.parse(localStorage.getItem('edupro_student')) || null,
@@ -539,76 +538,39 @@
         };
 
         // =====================================
-        // GENERATE SERTIFIKAT DENGAN SMART BARCODE
+        // MEMANGGIL API CETAK SERTIFIKAT KE SERVER
         // =====================================
         window.downloadCertificate = async () => {
-            Swal.fire({ title: 'Menyiapkan Sertifikat...', text: 'Mengunduh desain dan QR Code validasi', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
+            Swal.fire({ 
+                title: 'Mencetak Sertifikat...', 
+                text: 'Sistem sedang memproses dokumen resmi Anda di server. Mohon tunggu sekitar 5-10 detik...', 
+                allowOutsideClick: false, 
+                didOpen: () => { Swal.showLoading(); }
+            });
 
-            try {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-                const width = doc.internal.pageSize.getWidth();
-                const height = doc.internal.pageSize.getHeight();
+            // Mengirim perintah cetak ke server code.gs
+            const payload = {
+                student_id: state.user.id,
+                course_id: state.activeCourse.id,
+                final_score: window.courseFinalScore,
+                predikat: window.coursePredikat
+            };
 
-                const bgImg = new Image();
-                bgImg.crossOrigin = "Anonymous";
-                bgImg.src = "https://i.ibb.co.com/HwGLNCQ/template-background-sertifikat-A4.jpg"; 
-                await new Promise((resolve) => { bgImg.onload = resolve; bgImg.onerror = resolve; });
-                doc.addImage(bgImg, 'PNG', 0, 0, width, height);
-				
-				const logoImg = new Image();
-				logoImg.crossOrigin = "Anonymous";
-				logoImg.src = "https://i.ibb.co.com/6RpHgFzW/android-chrome-192x192.png";
-				await new Promise((resolve) => { logoImg.onload = resolve; logoImg.onerror = resolve; });
-				doc.addImage(logoImg, 'PNG', (width / 2) - 15, 10, 30, 30);
+            const res = await apiCall('generateCertificate', payload);
 
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(32); doc.setTextColor(30, 41, 59); 
-                doc.text("SERTIFIKAT KELULUSAN", width / 2, 55, { align: 'center' });
-
-                doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-                doc.text(`No. Sertifikat: ${state.user.id.toUpperCase()}`, width / 2, 62, { align: 'center' });
-
-                doc.setFontSize(14); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59); 
-                doc.text("Sertifikat ini diberikan dengan bangga kepada:", width / 2, 75, { align: 'center' });
-
-                doc.setFontSize(28); doc.setFont('helvetica', 'bold'); doc.setTextColor(79, 70, 229);
-                doc.text(state.user.full_name.toUpperCase(), width / 2, 90, { align: 'center' });
-
-                doc.setFontSize(14); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
-                doc.text("Atas keberhasilannya dalam menyelesaikan seluruh materi dan ujian pada kelas eksklusif:", width / 2, 110, { align: 'center' });
-
-                doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-                doc.text(state.activeCourse.title, width / 2, 125, { align: 'center' });
-
-                doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129);
-                doc.text(`Lulus dengan Predikat: ${window.coursePredikat} (${window.courseFinalScore}/100)`, width / 2, 135, { align: 'center' });
-
-                const today = new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
-                doc.setFontSize(12); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
-                doc.text(`Tanggal Lulus: ${today}`, width / 2, 145, { align: 'center' });
-
-                // --- SMART BARCODE: Mengirim seluruh data sertifikat ke Web App Server ---
-                const validationUrl = `${GAS_URL}?v=${state.user.id.toUpperCase()}&name=${encodeURIComponent(state.user.full_name)}&course=${encodeURIComponent(state.activeCourse.title)}&score=${window.courseFinalScore}&pred=${encodeURIComponent(window.coursePredikat)}&date=${encodeURIComponent(today)}`;
-                
-                const qrImg = new Image();
-                qrImg.crossOrigin = "Anonymous";
-                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(validationUrl)}`;
-                
-                await new Promise((resolve) => { qrImg.onload = resolve; qrImg.onerror = resolve; });
-                doc.addImage(qrImg, 'PNG', (width / 2) - 12.5, 150, 25, 25);
-                
-                doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
-                doc.text("Kartia Amriani, S.Pd., M.Pd.", width / 2, 183, { align: 'center' });
-                
-                doc.setLineWidth(0.5); doc.setDrawColor(30, 41, 59); 
-                doc.line((width / 2) - 35, 186, (width / 2) + 35, 186);
-
-                doc.setFontSize(11); doc.setFont('helvetica', 'normal');
-                doc.text("Direktur", width / 2, 192, { align: 'center' });
-
-                doc.save(`Sertifikat_${state.activeCourse.title.replace(/\s+/g, '_')}.pdf`);
-                Swal.close(); showToast("Sertifikat berhasil diunduh!");
-            } catch (error) { console.error(error); Swal.fire('Gagal', 'Terjadi kesalahan saat mencetak sertifikat. Pastikan koneksi internet stabil.', 'error'); }
+            if (res.success) {
+                Swal.fire({
+                    title: 'Berhasil!',
+                    text: 'Sertifikat Anda telah siap diunduh.',
+                    icon: 'success',
+                    confirmButtonText: '<i class="fa-solid fa-download"></i> Lihat Dokumen'
+                }).then(() => {
+                    // Sistem akan langsung membuka file PDF yang tersimpan di Google Drive
+                    window.open(res.link, '_blank');
+                });
+            } else {
+                Swal.fire('Gagal', res.error, 'error');
+            }
         };
 
         renderApp();
