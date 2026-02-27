@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduPro Admin | Dashboard Guru</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.min.css" rel="stylesheet">
+
+    <style>
+        :root { --primary-color: #0ea5e9; --primary-hover: #0284c7; --bg-color: #f1f5f9; --text-main: #0f172a; --text-muted: #64748b; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+        .card { border: none; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative;}
+        .card-hover:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .btn { font-weight: 600; border-radius: 0.75rem; padding: 0.6rem 1.2rem; }
+        .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); color: white;}
+        .btn-primary:hover { background-color: var(--primary-hover); border-color: var(--primary-hover); color: white;}
+        .form-control, .form-select { border-radius: 0.75rem; padding: 0.75rem 1rem; border-color: #e2e8f0; }
+        .form-control:focus, .form-select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 0.25rem rgba(14, 165, 233, 0.25); }
+        .navbar { background-color: #ffffff; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); padding: 1rem 0; }
+        .navbar-brand { font-weight: 800; color: var(--text-main) !important; font-size: 1.5rem; }
+        .nav-tabs .nav-link { border: none; color: var(--text-muted); font-weight: 600; padding: 1rem 1.5rem; border-bottom: 3px solid transparent; }
+        .nav-tabs .nav-link.active { color: var(--primary-color); background: transparent; border-bottom: 3px solid var(--primary-color); }
+        .progress { height: 0.75rem; border-radius: 1rem; background-color: #e2e8f0; }
+        .progress-bar.bg-success { background-color: #10b981 !important; }
+        .loader-container { display: flex; justify-content: center; align-items: center; padding: 3rem; }
+        .swal2-html-container { text-align: left !important; }
+        .price-badge { position: absolute; top: 1rem; right: 1rem; font-size: 0.85rem; font-weight: 700; padding: 0.5rem 0.8rem; border-radius: 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 2;}
+        iframe { border-radius: 0.5rem; border: none; }
+        .correct-answer { background-color: #d1fae5; border-color: #10b981; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        // GANTI DENGAN URL WEB APP GAS ANDA
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbyOYyOx1IItz8giMGf9FjoB2dxYIQ5E-YIbqUqx53AqNIjaveNmEOZ0uP3RPdgXBc6O6Q/exec";
+
+        let state = {
+            user: JSON.parse(localStorage.getItem('edupro_admin')) || null,
+            currentView: localStorage.getItem('edupro_admin') ? 'dashboard' : 'login',
+            activeCourse: null,
+            activeTab: 'materi',
+            courses: []
+        };
+
+        const apiCall = async (action, payload = {}) => {
+            try {
+                const response = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, payload }) });
+                return await response.json();
+            } catch (error) { return { success: false, error: "Koneksi ke server gagal." }; }
+        };
+
+        const showToast = (message, icon = 'success') => Swal.fire({ toast: true, position: 'top-end', icon, title: message, showConfirmButton: false, timer: 3000 });
+        const formatRupiah = (angka) => new Intl.NumberFormat('id-ID').format(angka);
+
+        const renderApp = () => {
+            const app = document.getElementById('app');
+            let html = '';
+            if (state.user && state.currentView !== 'login') {
+                html += `
+                    <nav class="navbar navbar-expand-lg sticky-top">
+                        <div class="container">
+                            <a class="navbar-brand d-flex align-items-center gap-2" href="#" onclick="navigate('dashboard')"><i class="fa-solid fa-chalkboard-user text-primary"></i> EduPro Admin</a>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="text-end d-none d-sm-block"><div class="fw-bold text-dark lh-1">${state.user.full_name}</div><small class="text-muted text-capitalize">Pengajar</small></div>
+                                <button onclick="handleLogout()" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button>
+                            </div>
+                        </div>
+                    </nav>`;
+            }
+            html += `<main class="container py-4 flex-grow-1" id="main-content"></main>`;
+            app.innerHTML = html;
+
+            const mainContent = document.getElementById('main-content');
+            if (state.currentView === 'login') renderLogin(mainContent);
+            else if (state.currentView === 'dashboard') renderTeacherDashboard(mainContent);
+            else if (state.currentView === 'courseDetail') renderCourseDetail(mainContent);
+            else if (state.currentView === 'transactions') renderTransactions(mainContent); // <-- ROUTE HALAMAN TRANSAKSI
+        };
+
+        const navigate = (view, courseData = null) => {
+            state.currentView = view;
+            if (courseData) state.activeCourse = courseData;
+            if (view === 'dashboard' || view === 'transactions') state.activeCourse = null;
+            renderApp();
+        };
+
+        window.openCourseGlobal = (id) => {
+            const course = state.courses.find(c => c.id === id);
+            if (course) navigate('courseDetail', course);
+        };
+
+        const renderLogin = (container) => {
+            container.innerHTML = `
+                <div class="row justify-content-center align-items-center h-100 mt-5">
+                    <div class="col-12 col-md-6 col-lg-5">
+                        <div class="card p-4 p-md-5 text-center">
+                            <h2 class="fw-bold mb-1" style="color: var(--primary-color);">Admin Panel</h2><p class="text-muted mb-4">Akses khusus Guru / Pengelola</p>
+                            <form id="loginForm">
+                                <div class="mb-4 text-start"><label class="form-label fw-semibold">NIP / ID Guru</label><input type="text" id="nisn" class="form-control" placeholder="Masukkan ID Guru..." required></div>
+                                <div class="mb-4 text-start"><label class="form-label fw-semibold">Password</label><input type="password" id="password" class="form-control" placeholder="Masukkan Password (jika ada)..."></div>
+                                <button type="submit" class="btn btn-primary w-100" id="btnLogin"><i class="fa-solid fa-arrow-right-to-bracket me-2"></i> Masuk Dashboard</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>`;
+
+            document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btnLogin'); btn.innerHTML = 'Memeriksa...'; btn.disabled = true;
+                const res = await apiCall('login', { nisn: document.getElementById('nisn').value, password: document.getElementById('password').value });
+                
+                if (res.success) {
+                    if(res.data.role !== 'teacher') { Swal.fire('Akses Ditolak', 'Halaman ini khusus Guru.', 'warning'); btn.innerHTML = 'Masuk Dashboard'; btn.disabled = false; return; }
+                    state.user = res.data; localStorage.setItem('edupro_admin', JSON.stringify(res.data));
+                    showToast(`Selamat datang, ${res.data.full_name}!`); navigate('dashboard');
+                } else { Swal.fire('Gagal', res.error, 'error'); btn.innerHTML = 'Masuk Dashboard'; btn.disabled = false; }
+            });
+        };
+
+        const handleLogout = () => {
+            Swal.fire({ title: 'Keluar?', text: "Sesi admin akan diakhiri.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Keluar' }).then((res) => {
+                if (res.isConfirmed) { localStorage.removeItem('edupro_admin'); state.user = null; navigate('login'); }
+            });
+        };
+
+        const renderTeacherDashboard = async (container) => {
+            container.innerHTML = `
+                <div class="row g-4 mb-4">
+                    <div class="col-12 col-lg-6"><div class="card h-100 p-4"><h5 class="fw-bold mb-3"><i class="fa-solid fa-folder-plus text-primary me-2"></i> Buat Kelas Baru</h5>
+                        <form id="formAddCourse"><div class="mb-3"><input type="text" id="courseTitle" class="form-control" placeholder="Judul Kelas" required></div><div class="mb-3"><textarea id="courseDesc" class="form-control" placeholder="Deskripsi Singkat..." rows="2" required></textarea></div><div class="mb-3"><input type="number" id="coursePrice" class="form-control" placeholder="Harga Kelas (Biarkan 0 jika Gratis)"></div><button type="submit" class="btn btn-primary w-100" id="btnCourse">Buat Kelas</button></form></div>
+                    </div>
+                    <div class="col-12 col-lg-6"><div class="card h-100 p-4 bg-primary bg-opacity-10"><h5 class="fw-bold mb-3 text-primary"><i class="fa-solid fa-user-plus me-2"></i> Daftarkan Siswa (Manual)</h5>
+                        <form id="formAddStudent"><div class="mb-3"><input type="text" id="studentName" class="form-control" placeholder="Nama Lengkap Siswa" required></div><div class="mb-3"><input type="text" id="studentNisn" class="form-control" placeholder="NISN (Username)" required></div><button type="submit" class="btn btn-primary w-100" id="btnStudent">Tambahkan Siswa</button></form></div>
+                    </div>
+                </div>
+                
+                <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center mb-3 mt-5 gap-3">
+                    <h4 class="fw-bold mb-0">Katalog Kelas Saya</h4>
+                    <button onclick="navigate('transactions')" class="btn btn-warning fw-bold text-dark px-4 shadow-sm">
+                        <i class="fa-solid fa-money-bill-transfer me-2"></i>Kelola Transaksi Pendaftaran
+                    </button>
+                </div>
+                
+                <div id="courseList" class="row g-4"><div class="loader-container"><div class="spinner-border text-primary"></div></div></div>
+            `;
+
+            document.getElementById('formAddCourse').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btnCourse'); btn.disabled = true; btn.innerHTML = 'Menyimpan...';
+                const payload = { title: document.getElementById('courseTitle').value, description: document.getElementById('courseDesc').value, price: document.getElementById('coursePrice').value || 0, teacher_id: state.user.id };
+                const res = await apiCall('addCourse', payload);
+                if (res.success) { showToast(res.message); document.getElementById('formAddCourse').reset(); loadTeacherCourses(); }
+                btn.disabled = false; btn.innerHTML = 'Buat Kelas';
+            });
+
+            document.getElementById('formAddStudent').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btnStudent'); btn.disabled = true;
+                const res = await apiCall('addUser', { full_name: document.getElementById('studentName').value, nisn: document.getElementById('studentNisn').value, role: 'student' });
+                if (res.success) { showToast(res.message); document.getElementById('formAddStudent').reset(); } else { Swal.fire('Gagal', res.error, 'error'); }
+                btn.disabled = false; btn.innerHTML = 'Tambahkan Siswa';
+            });
+
+            loadTeacherCourses();
+        };
+
+        const loadTeacherCourses = async () => {
+            const listData = await apiCall('getCourses', { role: state.user.role, teacher_id: state.user.id });
+            const listContainer = document.getElementById('courseList');
+            state.courses = listData.data || [];
+            
+            if (state.courses.length === 0) return listContainer.innerHTML = `<div class="col-12 text-center text-muted p-5 border bg-white rounded">Belum ada kelas yang Anda buat.</div>`;
+
+            let html = '';
+            state.courses.forEach(course => {
+                const priceText = parseInt(course.price) > 0 ? `Rp ${formatRupiah(course.price)}` : 'Gratis';
+                html += `
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <div class="card card-hover h-100">
+                            <span class="price-badge bg-secondary text-white">${priceText}</span>
+                            <div class="card-body d-flex flex-column mt-3">
+                                <h5 class="card-title fw-bold">${course.title}</h5>
+                                <p class="card-text text-muted flex-grow-1 small">${course.description}</p>
+                                <button onclick="openCourseGlobal('${course.id}')" class="btn btn-outline-primary mt-3 w-100">Kelola Kelas</button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            listContainer.innerHTML = html;
+        };
+
+        // ==========================================
+        // HALAMAN KELOLA TRANSAKSI (BARU)
+        // ==========================================
+        const renderTransactions = async (container) => {
+            container.innerHTML = `
+                <button onclick="navigate('dashboard')" class="btn btn-link text-decoration-none text-muted p-0 mb-4 fw-semibold"><i class="fa-solid fa-arrow-left me-1"></i> Kembali ke Dashboard</button>
+                <h3 class="fw-bold mb-4">Kelola Transaksi Pendaftaran</h3>
+                <div class="card border-0 shadow-sm overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light text-muted small">
+                                <tr>
+                                    <th class="ps-4 py-3">Waktu Transaksi</th>
+                                    <th class="py-3">Nama Siswa</th>
+                                    <th class="py-3">Mendaftar Kelas</th>
+                                    <th class="py-3 text-center">Status</th>
+                                    <th class="pe-4 py-3 text-center">Tindakan (Aksi)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trxTableBody">
+                                <tr><td colspan="5" class="text-center p-5"><div class="spinner-border text-primary"></div></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            loadTransactions();
+        };
+
+        window.loadTransactions = async () => {
+            const res = await apiCall('getTransactions', { role: 'teacher' });
+            const tbody = document.getElementById('trxTableBody');
+            
+            if (!res.success || res.data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center p-5 text-muted">Belum ada transaksi yang masuk saat ini.</td></tr>`;
+                return;
+            }
+            
+            let html = '';
+            res.data.forEach(trx => {
+                const dateObj = new Date(trx.created_at);
+                const date = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' + dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                
+                const isPaid = trx.status === 'PAID';
+                const statusBadge = isPaid 
+                    ? `<span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2">LUNAS (PAID)</span>` 
+                    : `<span class="badge bg-warning bg-opacity-10 text-warning border border-warning px-3 py-2"><i class="fa-regular fa-clock me-1"></i> PENDING</span>`;
+                    
+                const actionBtn = isPaid 
+                    ? `<button onclick="updateTrxStatus('${trx.id}', 'PENDING')" class="btn btn-sm btn-outline-danger">Batalkan (Pending)</button>`
+                    : `<button onclick="updateTrxStatus('${trx.id}', 'PAID')" class="btn btn-sm btn-success"><i class="fa-solid fa-check me-1"></i> Approve (Buka Akses)</button>`;
+
+                html += `
+                    <tr>
+                        <td class="ps-4 py-3 small text-muted">${date}</td>
+                        <td class="py-3 fw-semibold text-dark">${trx.student_name}</td>
+                        <td class="py-3 small">${trx.course_title}</td>
+                        <td class="py-3 text-center">${statusBadge}</td>
+                        <td class="pe-4 py-3 text-center">${actionBtn}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        };
+
+        window.updateTrxStatus = (id, newStatus) => {
+            let msg = newStatus === 'PAID' 
+                ? "Akses kelas akan segera dibuka untuk siswa ini." 
+                : "Akses kelas siswa ini akan dikunci kembali.";
+
+            Swal.fire({
+                title: 'Konfirmasi Perubahan?',
+                text: msg,
+                icon: 'question',
+                showCancelButton: true, confirmButtonColor: '#10b981', cancelButtonColor: '#d33',
+                confirmButtonText: 'Ya, Ubah Status', cancelButtonText: 'Batal'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.showLoading();
+                    const res = await apiCall('updateTransactionStatus', { id, status: newStatus });
+                    if (res.success) { showToast(res.message); loadTransactions(); } 
+                    else { Swal.fire('Gagal', res.error, 'error'); }
+                }
+            });
+        };
+
+        // ==========================================
+        // DETAIL KELAS, TUGAS, DAN LAINNYA
+        // ==========================================
+        const renderCourseDetail = async (container) => {
+            let html = `
+                <button onclick="navigate('dashboard')" class="btn btn-link text-decoration-none text-muted p-0 mb-4 fw-semibold"><i class="fa-solid fa-arrow-left me-1"></i> Kembali ke Dashboard</button>
+                <div class="card bg-dark text-white p-4 p-md-5 mb-4 rounded-4" style="background: linear-gradient(to right, #0f172a, #334155) !important;">
+                    <h2 class="fw-bold">${state.activeCourse.title}</h2><p class="mb-0 text-white-50">${state.activeCourse.description}</p>
+                </div>
+                <ul class="nav nav-tabs mb-4">
+                    <li class="nav-item"><button class="nav-link ${state.activeTab === 'materi' ? 'active' : ''}" onclick="switchTab('materi')"><i class="fa-solid fa-book me-2"></i>Materi & Tugas</button></li>
+                    <li class="nav-item"><button class="nav-link ${state.activeTab === 'tugas' ? 'active' : ''}" onclick="switchTab('tugas')"><i class="fa-solid fa-inbox me-2"></i>Penilaian Tugas</button></li>
+                    <li class="nav-item"><button class="nav-link ${state.activeTab === 'kuis' ? 'active' : ''}" onclick="switchTab('kuis')"><i class="fa-solid fa-list-check me-2"></i>Kelola Kuis</button></li>
+                    <li class="nav-item"><button class="nav-link ${state.activeTab === 'progress' ? 'active' : ''}" onclick="switchTab('progress')"><i class="fa-solid fa-chart-line me-2"></i>Pantau Progress</button></li>
+                </ul>
+                <div id="tabContent"><div class="loader-container"><div class="spinner-border text-primary"></div></div></div>`;
+            
+            container.innerHTML = html;
+            loadTabContent();
+        };
+
+        window.switchTab = (tabName) => { state.activeTab = tabName; renderCourseDetail(document.getElementById('main-content')); };
+
+        const loadTabContent = async () => {
+            const content = document.getElementById('tabContent');
+
+            if (state.activeTab === 'materi') {
+                const resMat = await apiCall('getMaterials', { course_id: state.activeCourse.id });
+                let materials = resMat.data || [];
+
+                let html = `
+                    <div class="card p-4 mb-4 border border-primary border-opacity-25 bg-white"><h5 class="fw-bold mb-3">Tambah Materi / Tugas Baru</h5>
+                        <form id="formAddMaterial">
+                            <div class="row g-3 mb-3"><div class="col-md-9"><input type="text" id="matTitle" class="form-control" placeholder="Judul Materi / Tugas" required></div><div class="col-md-3"><input type="number" id="matOrder" class="form-control" placeholder="Urutan (Cth: 1)" value="${materials.length + 1}" required></div></div>
+                            <div class="mb-3"><textarea id="matDesc" class="form-control" placeholder="Deskripsi Singkat..." rows="2" required></textarea></div>
+                            <div class="mb-3"><label class="form-label fw-semibold small text-muted">Instruksi Tugas (Opsional)</label><textarea id="matUrl" class="form-control" placeholder="Tulis instruksi tugas di sini. Kosongkan jika materi ini tidak memerlukan pengumpulan tugas." rows="2"></textarea></div>
+                            <div class="mb-3"><label class="form-label fw-semibold small text-muted">Kode Iframe / Video Materi (Opsional)</label><textarea id="matEmbed" class="form-control" placeholder="Paste kode <iframe> YouTube, GDrive, dll..." rows="2"></textarea></div>
+                            <button type="submit" id="btnMat" class="btn btn-primary"><i class="fa-solid fa-plus me-2"></i> Simpan Materi</button>
+                        </form>
+                    </div><div class="d-flex flex-column gap-3">`;
+
+                if (materials.length === 0) { html += `<div class="text-center text-muted p-5 bg-white rounded border">Belum ada materi pembelajaran.</div>`; } 
+                else {
+                    materials.forEach((mat, idx) => {
+                        const matStr = JSON.stringify(mat).replace(/"/g, '&quot;');
+                        let embedPreview = mat.embed_code ? `<div class="mt-3 ratio ratio-16x9 bg-light rounded overflow-hidden shadow-sm border">${mat.embed_code}</div>` : '';
+                        let taskBadge = mat.content_url ? `<span class="badge bg-warning text-dark ms-2"><i class="fa-solid fa-file-arrow-up me-1"></i> Ada Tugas</span>` : '';
+
+                        html += `
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex flex-column flex-md-row gap-3">
+                                        <div class="bg-primary bg-opacity-10 text-primary fw-bold rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 50px; height: 50px; font-size: 1.2rem;">${mat.order_number || idx + 1}</div>
+                                        <div class="flex-grow-1"><h5 class="fw-bold mb-1">${mat.title} ${taskBadge}</h5><p class="text-muted small mb-0">${mat.description}</p></div>
+                                        <div class="d-flex gap-2 w-100 w-md-auto mt-3 mt-md-0 align-items-start">
+                                            <button onclick="openEditModal(${matStr})" class="btn btn-warning text-white"><i class="fa-solid fa-pen"></i></button>
+                                            <button onclick="deleteMaterial('${mat.id}')" class="btn btn-danger"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                    ${embedPreview}
+                                </div>
+                            </div>`;
+                    });
+                }
+                html += `</div>`;
+                content.innerHTML = html;
+
+                document.getElementById('formAddMaterial').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const btn = document.getElementById('btnMat'); btn.disabled = true; btn.innerHTML = 'Menyimpan...';
+                    const payload = { course_id: state.activeCourse.id, title: document.getElementById('matTitle').value, description: document.getElementById('matDesc').value, content_url: document.getElementById('matUrl').value, order_number: parseInt(document.getElementById('matOrder').value), embed_code: document.getElementById('matEmbed').value };
+                    const res = await apiCall('addMaterial', payload);
+                    if (res.success) { showToast(res.message); loadTabContent(); }
+                });
+
+            } else if (state.activeTab === 'tugas') {
+                const resSub = await apiCall('getSubmissions', { course_id: state.activeCourse.id });
+                const submissions = resSub.data || [];
+
+                let html = `
+                    <div class="card border-0 shadow-sm overflow-hidden mb-4">
+                        <div class="card-header bg-white p-4 d-flex justify-content-between align-items-center border-bottom"><h5 class="fw-bold mb-0">Tugas yang Masuk (${submissions.length})</h5></div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light text-muted small"><tr><th class="ps-4 py-3">Nama Siswa</th><th class="py-3">Materi / Tugas</th><th class="py-3 text-center">Link Jawaban</th><th class="py-3 text-center">Nilai (Score)</th><th class="pe-4 py-3 text-center">Aksi</th></tr></thead>
+                                <tbody>
+                `;
+                if (submissions.length === 0) { html += `<tr><td colSpan="5" class="text-center p-5 text-muted">Belum ada tugas yang dikumpulkan siswa.</td></tr>`; } 
+                else {
+                    submissions.forEach(sub => {
+                        let scoreBadge = sub.score !== '' && sub.score !== null ? `<span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2" style="font-size:0.9rem;">${sub.score} / 100</span>` : `<span class="badge bg-warning bg-opacity-10 text-warning border border-warning px-3 py-2" style="font-size:0.9rem;">Belum Dinilai</span>`;
+                        html += `
+                            <tr>
+                                <td class="ps-4 py-3 fw-semibold text-dark">${sub.student_name}</td>
+                                <td class="py-3"><span class="small text-muted">${sub.material_title}</span></td>
+                                <td class="py-3 text-center"><a href="${sub.submission_url}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill"><i class="fa-solid fa-link me-1"></i> Buka File</a></td>
+                                <td class="py-3 text-center">${scoreBadge}</td>
+                                <td class="pe-4 py-3 text-center"><button onclick="gradeSubmission('${sub.id}', '${sub.student_name}')" class="btn btn-sm btn-success"><i class="fa-solid fa-check me-1"></i> Beri Nilai</button></td>
+                            </tr>`;
+                    });
+                }
+                html += `</tbody></table></div></div>`;
+                content.innerHTML = html;
+
+            } else if (state.activeTab === 'kuis') {
+                const resQuiz = await apiCall('getQuiz', { course_id: state.activeCourse.id, role: 'teacher' });
+                const quizzes = resQuiz.data || [];
+
+                let html = `
+                    <div class="card p-4 mb-4 border border-info border-opacity-25 bg-white">
+                        <h5 class="fw-bold mb-1">Tambah Soal Kuis</h5><p class="text-muted small mb-3">Siswa harus mendapatkan nilai minimal 80 untuk lulus dan mendapatkan sertifikat.</p>
+                        <form id="formAddQuiz">
+                            <div class="mb-3"><label class="form-label fw-bold small">Pertanyaan</label><textarea id="qQuestion" class="form-control" placeholder="Tuliskan pertanyaan di sini..." rows="2" required></textarea></div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6"><div class="input-group"><span class="input-group-text fw-bold">A</span><input type="text" id="qA" class="form-control" placeholder="Pilihan A" required></div></div>
+                                <div class="col-md-6"><div class="input-group"><span class="input-group-text fw-bold">B</span><input type="text" id="qB" class="form-control" placeholder="Pilihan B" required></div></div>
+                                <div class="col-md-6"><div class="input-group"><span class="input-group-text fw-bold">C</span><input type="text" id="qC" class="form-control" placeholder="Pilihan C" required></div></div>
+                                <div class="col-md-6"><div class="input-group"><span class="input-group-text fw-bold">D</span><input type="text" id="qD" class="form-control" placeholder="Pilihan D" required></div></div>
+                            </div>
+                            <div class="mb-3"><label class="form-label fw-bold small">Kunci Jawaban Benar</label><select id="qCorrect" class="form-select" required><option value="" disabled selected>-- Pilih Kunci Jawaban --</option><option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="d">D</option></select></div>
+                            <button type="submit" id="btnQuiz" class="btn btn-info text-white"><i class="fa-solid fa-plus me-2"></i> Tambahkan Soal</button>
+                        </form>
+                    </div>
+                    <h5 class="fw-bold mb-3 mt-4">Daftar Soal Kuis (${quizzes.length} Soal)</h5><div class="d-flex flex-column gap-3">
+                `;
+                if (quizzes.length === 0) { html += `<div class="text-center text-muted p-5 bg-white rounded border">Belum ada soal kuis untuk kelas ini.</div>`; } 
+                else {
+                    quizzes.forEach((q, idx) => {
+                        html += `
+                            <div class="card border border-light shadow-sm">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3"><h6 class="fw-bold mb-0"><span class="badge bg-secondary me-2">Soal ${idx + 1}</span> ${q.question}</h6><button onclick="deleteQuiz('${q.id}')" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button></div>
+                                    <div class="row g-2 small">
+                                        <div class="col-md-6"><div class="p-2 border rounded ${q.correct === 'a' ? 'correct-answer' : 'bg-light'}"><b>A.</b> ${q.a}</div></div>
+                                        <div class="col-md-6"><div class="p-2 border rounded ${q.correct === 'b' ? 'correct-answer' : 'bg-light'}"><b>B.</b> ${q.b}</div></div>
+                                        <div class="col-md-6"><div class="p-2 border rounded ${q.correct === 'c' ? 'correct-answer' : 'bg-light'}"><b>C.</b> ${q.c}</div></div>
+                                        <div class="col-md-6"><div class="p-2 border rounded ${q.correct === 'd' ? 'correct-answer' : 'bg-light'}"><b>D.</b> ${q.d}</div></div>
+                                    </div>
+                                </div>
+                            </div>`;
+                    });
+                }
+                html += `</div>`;
+                content.innerHTML = html;
+
+                document.getElementById('formAddQuiz').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const btn = document.getElementById('btnQuiz'); btn.disabled = true; btn.innerHTML = 'Menyimpan...';
+                    const payload = { course_id: state.activeCourse.id, question: document.getElementById('qQuestion').value, a: document.getElementById('qA').value, b: document.getElementById('qB').value, c: document.getElementById('qC').value, d: document.getElementById('qD').value, correct: document.getElementById('qCorrect').value };
+                    const res = await apiCall('addQuizQuestion', payload);
+                    if (res.success) { showToast(res.message); loadTabContent(); }
+                });
+
+            } else if (state.activeTab === 'progress') {
+                const resRep = await apiCall('getCourseReport', { course_id: state.activeCourse.id });
+                if (!resRep.success) return content.innerHTML = `<div class="alert alert-danger">Gagal memuat laporan.</div>`;
+                
+                const { students, progress: progressData, materialsCount, allScores } = resRep.data;
+                let html = `
+                    <div class="card border-0 shadow-sm overflow-hidden">
+                        <div class="card-header bg-white p-4 d-flex justify-content-between align-items-center border-bottom">
+                            <div><h5 class="fw-bold mb-0">Laporan Kelulusan Siswa</h5><small class="text-muted">Total Materi: ${materialsCount}</small></div>
+                            <button onclick="exportToPDF()" class="btn btn-danger btn-sm"><i class="fa-solid fa-file-pdf me-2"></i> Cetak PDF</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="progressTable">
+                                <thead class="table-light text-muted small"><tr><th class="ps-4 py-3">Nama Siswa</th><th class="py-3">Materi (100%)</th><th class="py-3 text-center">Nilai Kuis</th><th class="pe-4 py-3 text-center">Status Kelulusan</th></tr></thead>
+                                <tbody>
+                `;
+                if (students.length === 0) { html += `<tr><td colSpan="4" class="text-center p-4 text-muted">Belum ada siswa terdaftar.</td></tr>`; } 
+                else {
+                    students.forEach(student => {
+                        const completedCount = progressData.filter(p => p.student_id === student.id).length;
+                        const percentage = materialsCount === 0 ? 0 : Math.round((completedCount / materialsCount) * 100);
+                        const studentScores = allScores ? allScores.filter(s => s.student_id === student.id) : [];
+                        const bestScore = studentScores.length > 0 ? Math.max(...studentScores.map(s => s.score)) : 0;
+                        const hasTakenQuiz = studentScores.length > 0;
+                        const isLulus = (percentage === 100 && materialsCount > 0) && bestScore >= 80;
+                        let scoreHtml = hasTakenQuiz ? `<span class="fw-bold ${bestScore >= 80 ? 'text-success' : 'text-danger'}">${bestScore}</span>` : `<span class="text-muted small">-</span>`;
+
+                        html += `
+                            <tr>
+                                <td class="ps-4 py-3 fw-semibold text-dark">${student.full_name}<br><small class="text-muted fw-normal">${student.nisn}</small></td>
+                                <td class="py-3"><div class="progress mb-1" style="height: 6px;"><div class="progress-bar ${percentage === 100 ? 'bg-success' : 'bg-primary'}" style="width: ${percentage}%"></div></div><small class="text-muted fw-bold" style="font-size: 0.75rem;">${percentage}% (${completedCount}/${materialsCount})</small></td>
+                                <td class="py-3 text-center" style="font-size: 1.1rem;">${scoreHtml}</td>
+                                <td class="pe-4 py-3 text-center">${isLulus ? `<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="fa-solid fa-award me-1"></i> LULUS</span>` : `<span class="badge bg-warning bg-opacity-10 text-warning border border-warning">BELUM</span>`}</td>
+                            </tr>`;
+                    });
+                }
+                html += `</tbody></table></div></div>`;
+                content.innerHTML = html;
+            }
+        };
+
+        window.gradeSubmission = (id, studentName) => {
+            Swal.fire({
+                title: 'Beri Nilai Tugas',
+                html: `<p class="mb-3 text-muted">Masukkan nilai (1-100) untuk <b>${studentName}</b></p><input type="number" id="gradeScore" class="form-control text-center fs-4 fw-bold" placeholder="100" min="0" max="100">`,
+                showCancelButton: true, confirmButtonText: 'Simpan Nilai', cancelButtonText: 'Batal', confirmButtonColor: '#10b981',
+                preConfirm: () => { const score = document.getElementById('gradeScore').value; if(!score) Swal.showValidationMessage('Nilai tidak boleh kosong!'); return { id: id, score: score }; }
+            }).then(async (result) => {
+                if (result.isConfirmed) { Swal.showLoading(); const res = await apiCall('gradeAssignment', result.value); if (res.success) { showToast(res.message); loadTabContent(); } else { Swal.fire('Gagal', res.error, 'error'); } }
+            });
+        };
+
+        window.openEditModal = (mat) => {
+            Swal.fire({
+                title: 'Edit Materi',
+                html: `<div class="text-start">
+                        <div class="mb-3"><label class="form-label fw-bold small">Judul Materi</label><input type="text" id="editTitle" class="form-control" value="${mat.title}"></div>
+                        <div class="mb-3"><label class="form-label fw-bold small">Urutan (Angka)</label><input type="number" id="editOrder" class="form-control" value="${mat.order_number}"></div>
+                        <div class="mb-3"><label class="form-label fw-bold small">Deskripsi</label><textarea id="editDesc" class="form-control" rows="2">${mat.description}</textarea></div>
+                        <div class="mb-3"><label class="form-label fw-bold small text-primary">Instruksi Tugas</label><textarea id="editUrl" class="form-control" rows="2" placeholder="Kosongkan jika tidak ada tugas">${mat.content_url || ''}</textarea></div>
+                        <div class="mb-3"><label class="form-label fw-bold small">Kode Iframe</label><textarea id="editEmbed" class="form-control" rows="2">${mat.embed_code || ''}</textarea></div>
+                    </div>`,
+                showCancelButton: true, confirmButtonText: '<i class="fa-solid fa-save"></i> Simpan', cancelButtonText: 'Batal', confirmButtonColor: '#0ea5e9',
+                preConfirm: () => { return { id: mat.id, title: document.getElementById('editTitle').value, order_number: parseInt(document.getElementById('editOrder').value), description: document.getElementById('editDesc').value, content_url: document.getElementById('editUrl').value, embed_code: document.getElementById('editEmbed').value } }
+            }).then(async (result) => {
+                if (result.isConfirmed) { Swal.showLoading(); const res = await apiCall('editMaterial', result.value); if (res.success) { showToast(res.message); loadTabContent(); } }
+            });
+        };
+
+        window.deleteMaterial = (id) => { Swal.fire({ title: 'Hapus Materi?', text: "Data tidak bisa dikembalikan!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus' }).then(async (result) => { if (result.isConfirmed) { Swal.showLoading(); const res = await apiCall('deleteMaterial', { id }); if (res.success) { showToast(res.message); loadTabContent(); } } }); };
+        window.deleteQuiz = (id) => { Swal.fire({ title: 'Hapus Soal?', text: "Soal akan dihapus permanen.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus' }).then(async (result) => { if (result.isConfirmed) { Swal.showLoading(); const res = await apiCall('deleteQuizQuestion', { id }); if (res.success) { showToast(res.message); loadTabContent(); } } }); };
+
+        window.exportToPDF = () => {
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('LAPORAN PROGRESS & NILAI SISWA', 14, 20);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.text(`Mata Pelajaran : ${state.activeCourse.title}`, 14, 28); doc.text(`Pengajar       : ${state.user.full_name}`, 14, 34); doc.text(`Tanggal Cetak  : ${new Date().toLocaleDateString('id-ID')}`, 14, 40);
+            doc.autoTable({ html: '#progressTable', startY: 48, theme: 'grid', headStyles: { fillColor: [14, 165, 233] }, styles: { fontSize: 10, cellPadding: 4 } });
+            doc.save(`Laporan_${state.activeCourse.title.replace(/\s+/g, '_')}.pdf`); showToast('PDF berhasil diunduh!');
+        };
+
+        renderApp();
+    </script>
+</body>
+</html>
