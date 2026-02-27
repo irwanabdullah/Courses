@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Validasi Sertifikat EduPro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.32/dist/sweetalert2.all.min.js"></script>
+    <style>
+        body { background-color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: sans-serif;}
+        .card { border: none; border-radius: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 450px; padding: 2.5rem; text-align: center; background: white;}
+    </style>
+</head>
+<body>
+    <div class="card mx-auto">
+        <i class="fa-solid fa-file-shield text-success mb-3" style="font-size: 4rem;"></i>
+        <h4 class="fw-bold mb-1">Sertifikat Terverifikasi</h4>
+        <p class="text-muted mb-4 small">Dokumen ini adalah otentik dan resmi diterbitkan oleh EduPro LMS.</p>
+        
+        <div class="bg-light p-3 rounded-3 text-start mb-4 border">
+            <div class="mb-2"><small class="text-muted d-block">Diberikan Kepada:</small><span class="fw-bold fs-5"><?= name ?></span></div>
+            <div class="mb-2"><small class="text-muted d-block">Program/Kelas:</small><span class="fw-bold text-primary"><?= course ?></span></div>
+            <div><small class="text-muted d-block">Predikat Lulus:</small><span class="badge bg-success"><?= pred ?> (<?= score ?>/100)</span></div>
+        </div>
+
+        <button onclick="downloadIdenticalCopy()" class="btn btn-primary btn-lg w-100 fw-bold rounded-pill shadow-sm">
+            <i class="fa-solid fa-download me-2"></i> Unduh Salinan Sertifikat
+        </button>
+    </div>
+
+    <script>
+        // Fungsi ini akan menggambar ulang file PDF yang SAMA PERSIS dengan yang asli
+        async function downloadIdenticalCopy() {
+            Swal.fire({ title: 'Menyiapkan Dokumen...', text: 'Membangun ulang salinan sertifikat asli', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }});
+            
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                const width = doc.internal.pageSize.getWidth();
+                const height = doc.internal.pageSize.getHeight();
+
+                const bgImg = new Image(); bgImg.crossOrigin = "Anonymous"; bgImg.src = "https://i.ibb.co.com/HwGLNCQ/template-background-sertifikat-A4.jpg"; 
+                await new Promise((resolve) => { bgImg.onload = resolve; bgImg.onerror = resolve; });
+                doc.addImage(bgImg, 'PNG', 0, 0, width, height);
+                
+                const logoImg = new Image(); logoImg.crossOrigin = "Anonymous"; logoImg.src = "https://i.ibb.co.com/6RpHgFzW/android-chrome-192x192.png";
+                await new Promise((resolve) => { logoImg.onload = resolve; logoImg.onerror = resolve; });
+                doc.addImage(logoImg, 'PNG', (width / 2) - 15, 10, 30, 30);
+
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(32); doc.setTextColor(30, 41, 59); 
+                doc.text("SERTIFIKAT KELULUSAN", width / 2, 55, { align: 'center' });
+
+                doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+                doc.text("No. Sertifikat: <?= certId ?>", width / 2, 62, { align: 'center' });
+
+                doc.setFontSize(14); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59); 
+                doc.text("Sertifikat ini diberikan dengan bangga kepada:", width / 2, 75, { align: 'center' });
+
+                doc.setFontSize(28); doc.setFont('helvetica', 'bold'); doc.setTextColor(79, 70, 229);
+                doc.text("<?= name ?>".toUpperCase(), width / 2, 90, { align: 'center' });
+
+                doc.setFontSize(14); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
+                doc.text("Atas keberhasilannya dalam menyelesaikan seluruh materi dan ujian pada kelas eksklusif:", width / 2, 110, { align: 'center' });
+
+                doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+                doc.text("<?= course ?>", width / 2, 125, { align: 'center' });
+
+                doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129);
+                doc.text("Lulus dengan Predikat: <?= pred ?> (<?= score ?>/100)", width / 2, 135, { align: 'center' });
+
+                doc.setFontSize(12); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 41, 59);
+                doc.text("Tanggal Lulus: <?= date ?>", width / 2, 145, { align: 'center' });
+
+                // Barcode salinan ini menyimpan URL yang sama dengan aslinya
+                const qrImg = new Image(); qrImg.crossOrigin = "Anonymous";
+                qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(window.location.href)}`;
+                await new Promise((resolve) => { qrImg.onload = resolve; qrImg.onerror = resolve; });
+                doc.addImage(qrImg, 'PNG', (width / 2) - 12.5, 150, 25, 25);
+                
+                doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+                doc.text("Kartia Amriani, S.Pd., M.Pd.", width / 2, 183, { align: 'center' });
+                
+                doc.setLineWidth(0.5); doc.setDrawColor(30, 41, 59); 
+                doc.line((width / 2) - 35, 186, (width / 2) + 35, 186);
+
+                doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+                doc.text("Direktur", width / 2, 192, { align: 'center' });
+
+                doc.save("Salinan_Sertifikat_<?= name ?>.pdf");
+                Swal.close();
+            } catch (e) {
+                Swal.fire('Error', 'Terjadi kesalahan sistem saat mengambil sertifikat.', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
